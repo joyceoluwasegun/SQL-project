@@ -1,1 +1,150 @@
+select location, date, total_cases, new_cases, total_deaths, population
+from coviddeath
+order by 1,2;
 
+--looking at the total number of cases to the total number of death
+select location, date, total_cases, total_deaths, (total_deaths/total_cases::float)*100 as percentageDeath
+from coviddeath
+where location = 'Nigeria'
+order by 1,2;
+
+--looking at countries with the highest rate of infection
+select location, population, Max(total_cases) as HighestInfectedcount, Max(total_cases/population::float)*100 as PopulationInfectedPercentage
+from coviddeath
+Group by location, population
+order by PopulationInfectedPercentage desc;
+
+
+select location, population,date, Max(total_cases) as HighestInfectedcount, Max(total_cases/population::float)*100 as PopulationInfectedPercentage
+from coviddeath
+Group by location, population, date
+order by PopulationInfectedPercentage desc;
+
+
+
+--Countries that has the highest death count per population
+select location, Max(cast(total_deaths as int)) as TotalDeath
+from coviddeath
+Group by location
+order by TotalDeath desc;
+
+--To remove continents from the location column
+select location, Max(cast(total_deaths as int)) as TotalDeath
+from coviddeath
+where continent is not null
+Group by location
+order by TotalDeath desc;
+
+-- Breaking things down into continents
+select continent, Max(cast(total_deaths as int)) as TotalDeath
+from coviddeath
+where continent is not null
+Group by continent
+order by TotalDeath desc;
+
+--Breaking things down into location
+-- world, European Union and international were dropped
+select location, Max(cast(total_deaths as int)) as TotalDeath
+from coviddeath
+where continent is null
+and location not in ('World', 'European Union', 'International')
+Group by location
+order by TotalDeath desc;
+
+--Global Numbers
+select date, sum(new_cases), sum(new_deaths), sum(new_deaths::float)/sum(new_cases)*100 as PercentageDeath  
+from coviddeath
+where continent is not null
+Group by date
+order by 1,2;
+
+select sum(new_cases) as total_cases, sum(new_deaths) as total_deaths, sum(new_deaths::float)/sum(new_cases)*100 as PercentageDeath  
+from coviddeath
+where continent is not null
+order by 1,2;
+
+
+--To join table coviddeath and table vaccination together
+select * 
+from coviddeath dth
+join vaccination vac
+   on dth.location = vac.location
+   and dth.date = vac.date;
+   
+--To check for the Total population to Vaccination
+select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations
+from coviddeath dth
+join vaccination vac
+   on dth.location = vac.location
+   and dth.date = vac.date
+where dth.continent is not null
+order by 1,2
+   
+   
+   
+--changing the order from 1,2 to 2,3   
+select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date)
+from coviddeath dth
+join vaccination vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+where dth.continent is not null
+order by 2,3;
+
+
+
+-- use CTE
+with vacpop (continent, location, date, population, new_vaccination, sum_of_people_vaccinated)
+as
+(
+select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as sum_of_people_vaccinated
+from coviddeath dth
+join vaccination vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+where dth.continent is not null
+)
+select *
+from vacpop;
+
+
+--To include the percentage of the vaccinated
+with vacpop (continent, location, date, population, new_vaccination, sum_of_people_vaccinated)
+as
+(
+select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as sum_of_people_vaccinated
+from coviddeath dth
+join vaccination vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+where dth.continent is not null
+)
+select *, (sum_of_people_vaccinated/population) * 100 as PerSumVaccinated
+from vacpop;
+
+--To create Views
+
+
+--vacpop view
+create view vacpop as
+select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as sum_of_people_vaccinated
+from coviddeath dth
+join vaccination vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+where dth.continent is not null;
+
+--Global_Numbers view
+create view GlobalNumber as
+select date, sum(new_cases) as total_cases, sum(new_deaths) as total_deaths, sum(new_deaths::float)/sum(new_cases)*100 as PercentageDeath  
+from coviddeath
+where continent is not null
+Group by date
+order by 1,2;
+
+--Higest rate of infection view
+create view InfectionRate as
+select location, population, Max(total_cases) as HighestInfectedcount, Max(total_cases/population::float)*100 as PopulationInfectedPercentage
+from coviddeath
+Group by location, population
+order by PopulationInfectedPercentage desc;
